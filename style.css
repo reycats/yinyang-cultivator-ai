@@ -1091,3 +1091,52 @@ code {
         display: none;
     }
 }
+
+/* Status Indicators */
+.status-connected {
+    color: #10B981 !important;
+}
+
+.status-error {
+    color: #EF4444 !important;
+}
+
+.status-checking {
+    color: #F59E0B !important;
+}
+
+/* API Status Styling */
+#api-status {
+    font-weight: 500;
+    padding: 4px 12px;
+    border-radius: 20px;
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 0.9rem;
+}
+
+/* Model Info */
+#model-info {
+    font-weight: 500;
+    color: var(--accent);
+}
+
+/* Modal Backdrop */
+.modal.active {
+    display: flex !important;
+}
+
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(5px);
+    z-index: 999;
+    display: none;
+}
+
+.modal-backdrop.active {
+    display: block;
+}
