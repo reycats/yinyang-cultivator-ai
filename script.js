@@ -1,119 +1,291 @@
+// ==================== DEEPKU AI CHAT - FIXED VERSION ====================
+// Problem: API key 402/401 errors, models not working
+// Solution: Use latest API format and proper models
+
 // ==================== CONFIGURATION ====================
 const CONFIG = {
-    API_KEY: "", // SELALU KOSONG - ambil dari localStorage
+    // API key akan diambil dari localStorage
+    API_KEY: "", 
+    // ENDPOINT YANG BENAR:
     API_URL: "https://api.deepseek.com/chat/completions",
+    // MODELS YANG VALID (pilih salah satu):
+    MODELS: [
+        { id: "deepseek-chat", name: "DeepSeek Chat (Latest)" },
+        { id: "deepseek-coder", name: "DeepSeek Coder" },
+        { id: "deepseek-v3", name: "DeepSeek V3 (Beta)" },
+        { id: "deepseek-v2", name: "DeepSeek V2" },
+        { id: "deepseek-r1", name: "DeepSeek R1" }
+    ],
     DEFAULT_MODEL: "deepseek-chat",
     MAX_TOKENS: 2000,
     DEFAULT_THEME: "dark",
-    VERSION: "1.1.0"
+    VERSION: "2.0.0"
 };
 
-// ==================== API KEY SYSTEM ====================
-const ApiKeySystem = {
-    STORAGE_KEY: 'deepseek_api_key_v2',
-    CURRENT_API_KEY: null,
+// ==================== API KEY SYSTEM (FIXED) ====================
+const DeepSeekAPI = {
+    // Storage key (gunakan timestamp untuk hindari cache)
+    STORAGE_KEY: 'deepseek_api_' + new Date().getFullYear() + '_' + (new Date().getMonth() + 1),
     
-    init() {
-        this.loadApiKey();
-        
-        // Auto-show modal if no valid key
-        if (!this.hasValidKey()) {
-            setTimeout(() => this.showApiKeyModal(), 1000);
-        }
-    },
-    
-    loadApiKey() {
+    // Get current API key
+    getKey() {
         try {
             const key = localStorage.getItem(this.STORAGE_KEY);
+            // Validasi format API key
             if (key && key.startsWith('sk-') && key.length > 30) {
-                this.CURRENT_API_KEY = key;
-                CONFIG.API_KEY = key;
-                return true;
+                return key;
             }
+            return null;
         } catch (e) {
-            console.warn('Failed to load API key from localStorage:', e);
+            console.error('Error reading API key:', e);
+            return null;
         }
-        return false;
     },
     
-    saveApiKey(key) {
-        if (!key || !key.startsWith('sk-') || key.length < 30) {
-            return { success: false, message: 'Format API key tidak valid' };
+    // Save API key
+    saveKey(key) {
+        if (!key || !key.startsWith('sk-')) {
+            return { success: false, message: 'Format API key tidak valid. Harus dimulai dengan "sk-"' };
         }
         
         try {
+            // Juga simpan di sessionStorage untuk backup
             localStorage.setItem(this.STORAGE_KEY, key);
-            this.CURRENT_API_KEY = key;
-            CONFIG.API_KEY = key;
+            sessionStorage.setItem('deepseek_session_key', key);
             return { success: true, message: 'API key disimpan' };
         } catch (e) {
-            console.error('Failed to save API key:', e);
-            return { success: false, message: 'Gagal menyimpan API key' };
+            console.error('Error saving API key:', e);
+            return { success: false, message: 'Gagal menyimpan API key. Coba clear cache browser.' };
         }
     },
     
-    hasValidKey() {
-        return this.CURRENT_API_KEY && 
-               this.CURRENT_API_KEY.startsWith('sk-') && 
-               this.CURRENT_API_KEY.length > 30 &&
-               this.CURRENT_API_KEY !== "sk-ce242eb3749d4b9c88f6416b008d6836";
+    // Test API connection
+    async testConnection(apiKey, model = CONFIG.DEFAULT_MODEL) {
+        try {
+            console.log('Testing API connection with model:', model);
+            
+            const response = await fetch(CONFIG.API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: [
+                        { 
+                            role: "user", 
+                            content: "Hello, please respond with 'OK' if you can read this." 
+                        }
+                    ],
+                    max_tokens: 10,
+                    temperature: 0.1
+                }),
+                // Timeout 10 detik
+                signal: AbortSignal.timeout(10000)
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                let errorMsg = `Error ${response.status}: `;
+                
+                switch(response.status) {
+                    case 401:
+                        errorMsg += "API Key tidak valid atau tidak ada.";
+                        break;
+                    case 402:
+                        errorMsg += "Kuota habis atau perlu upgrade plan. Cek di platform.deepseek.com";
+                        break;
+                    case 429:
+                        errorMsg += "Terlalu banyak permintaan. Tunggu beberapa saat.";
+                        break;
+                    case 400:
+                        errorMsg += "Permintaan tidak valid. " + (data.error?.message || '');
+                        break;
+                    default:
+                        errorMsg += data.error?.message || 'Unknown error';
+                }
+                
+                return { 
+                    success: false, 
+                    message: errorMsg,
+                    status: response.status,
+                    data: data
+                };
+            }
+            
+            return { 
+                success: true, 
+                message: '✅ API berhasil terkoneksi!',
+                data: data
+            };
+            
+        } catch (error) {
+            console.error('Connection test error:', error);
+            
+            let errorMsg = 'Gagal terkoneksi: ';
+            if (error.name === 'AbortError') {
+                errorMsg += 'Timeout. Coba lagi.';
+            } else if (error.message.includes('fetch')) {
+                errorMsg += 'Network error. Cek koneksi internet.';
+            } else {
+                errorMsg += error.message;
+            }
+            
+            return { 
+                success: false, 
+                message: errorMsg,
+                error: error
+            };
+        }
     },
     
-    getApiKey() {
-        return this.CURRENT_API_KEY || "";
+    // Send chat message
+    async sendMessage(apiKey, messages, model = CONFIG.DEFAULT_MODEL, maxTokens = CONFIG.MAX_TOKENS) {
+        try {
+            const response = await fetch(CONFIG.API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`
+                },
+                body: JSON.stringify({
+                    model: model,
+                    messages: messages,
+                    max_tokens: maxTokens,
+                    temperature: 0.7,
+                    stream: false
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(`API Error ${response.status}: ${JSON.stringify(data.error || 'Unknown error')}`);
+            }
+            
+            return {
+                success: true,
+                data: data,
+                message: data.choices[0]?.message?.content || ''
+            };
+            
+        } catch (error) {
+            console.error('Send message error:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
     },
     
-    showApiKeyModal(force = false) {
-        // Remove existing modal
-        const existing = document.querySelector('.api-key-modal-main');
-        if (existing) existing.remove();
+    // Get available models (from API if possible)
+    async getAvailableModels(apiKey) {
+        // DeepSeek doesn't have models endpoint, so return our list
+        return CONFIG.MODELS;
+    }
+};
+
+// ==================== UI MANAGEMENT ====================
+const UI = {
+    showToast(message, type = 'info', duration = 4000) {
+        // Remove existing toasts
+        document.querySelectorAll('.toast-message').forEach(toast => toast.remove());
         
-        // Create modal
+        const toast = document.createElement('div');
+        toast.className = `toast-message toast-${type}`;
+        toast.innerHTML = `
+            <div class="toast-content">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+                <span>${message}</span>
+            </div>
+        `;
+        
+        document.body.appendChild(toast);
+        
+        // Show animation
+        setTimeout(() => toast.classList.add('show'), 10);
+        
+        // Auto remove
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, duration);
+    },
+    
+    showApiKeyModal() {
         const modal = document.createElement('div');
-        modal.className = 'api-key-modal-main';
+        modal.className = 'api-modal-overlay';
         modal.innerHTML = `
-            <div class="api-modal-overlay"></div>
-            <div class="api-modal-content">
+            <div class="api-modal">
                 <div class="api-modal-header">
-                    <h3><i class="fas fa-key"></i> API Key Required</h3>
-                    <button class="api-modal-close">&times;</button>
+                    <h3><i class="fas fa-key"></i> Setup API Key</h3>
+                    <button class="close-modal">&times;</button>
                 </div>
                 <div class="api-modal-body">
-                    <p>Untuk menggunakan AI Assistant, Anda perlu memasukkan API Key dari DeepSeek.</p>
-                    
-                    <div class="api-key-input-group">
-                        <label for="api-key-input">API Key Anda:</label>
-                        <div class="input-with-button">
-                            <input type="password" id="api-key-input" 
-                                   placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                                   value="${this.getApiKey() || ''}">
-                            <button type="button" id="toggle-visibility">
-                                <i class="fas fa-eye"></i>
-                            </button>
+                    <div class="setup-steps">
+                        <div class="step">
+                            <span class="step-number">1</span>
+                            <div class="step-content">
+                                <h4>Dapatkan API Key</h4>
+                                <p>Buka <a href="https://platform.deepseek.com/api_keys" target="_blank" class="api-link">platform.deepseek.com/api_keys</a></p>
+                                <p>Login dan buat API Key baru (gratis)</p>
+                            </div>
                         </div>
-                        <small class="api-key-hint">
-                            Dapatkan API key gratis dari <a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a>
-                        </small>
+                        
+                        <div class="step">
+                            <span class="step-number">2</span>
+                            <div class="step-content">
+                                <h4>Copy API Key</h4>
+                                <p>Format: <code>sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></p>
+                                <div class="api-key-input-container">
+                                    <input type="password" id="api-key-input" 
+                                           placeholder="Tempel API key di sini..." 
+                                           class="api-key-input">
+                                    <button type="button" id="toggle-key-visibility" class="toggle-btn">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="step">
+                            <span class="step-number">3</span>
+                            <div class="step-content">
+                                <h4>Test Connection</h4>
+                                <div class="test-section">
+                                    <select id="test-model-select" class="model-select">
+                                        ${CONFIG.MODELS.map(m => 
+                                            `<option value="${m.id}">${m.name}</option>`
+                                        ).join('')}
+                                    </select>
+                                    <button id="test-api-btn" class="test-btn">
+                                        <i class="fas fa-bolt"></i> Test Connection
+                                    </button>
+                                </div>
+                                <div id="test-result" class="test-result"></div>
+                            </div>
+                        </div>
                     </div>
                     
-                    <div class="test-result" id="test-result"></div>
-                    
-                    <div class="api-modal-actions">
-                        <button id="test-api-btn" class="btn-secondary">
-                            <i class="fas fa-bolt"></i> Test Connection
+                    <div class="modal-actions">
+                        <button id="save-api-btn" class="save-btn primary">
+                            <i class="fas fa-save"></i> Save & Start Chatting
                         </button>
-                        <button id="save-api-btn" class="btn-primary">
-                            <i class="fas fa-save"></i> Save & Continue
+                        <button class="save-btn secondary" onclick="window.open('https://platform.deepseek.com/api_keys', '_blank')">
+                            <i class="fas fa-external-link-alt"></i> Open DeepSeek Dashboard
                         </button>
                     </div>
                     
                     <div class="api-tips">
-                        <h4><i class="fas fa-lightbulb"></i> Tips:</h4>
+                        <h4><i class="fas fa-lightbulb"></i> Important Tips:</h4>
                         <ul>
-                            <li>API key disimpan <strong>hanya di browser Anda</strong></li>
-                            <li>Gunakan API key pribadi (jangan pakai yang bocor)</li>
-                            <li>Jika error 401/402, buat API key baru di dashboard</li>
-                            <li>Clear cache browser jika ada masalah</li>
+                            <li><strong>Free tier available</strong> - Get free credits on signup</li>
+                            <li><strong>Check your credits</strong> at platform.deepseek.com/usage</li>
+                            <li>If 402 error: Your credits exhausted, need to recharge</li>
+                            <li>If 401 error: API key invalid or format wrong</li>
+                            <li>Clear browser cache if having issues</li>
                         </ul>
                     </div>
                 </div>
@@ -123,101 +295,112 @@ const ApiKeySystem = {
         document.body.appendChild(modal);
         
         // Event listeners
-        const closeBtn = modal.querySelector('.api-modal-close');
+        const closeBtn = modal.querySelector('.close-modal');
         const saveBtn = modal.querySelector('#save-api-btn');
         const testBtn = modal.querySelector('#test-api-btn');
         const input = modal.querySelector('#api-key-input');
-        const toggleBtn = modal.querySelector('#toggle-visibility');
+        const toggleBtn = modal.querySelector('#toggle-key-visibility');
+        const testResult = modal.querySelector('#test-result');
         
         // Close modal
-        closeBtn.addEventListener('click', () => {
-            modal.remove();
-            // Jika force modal dan tidak ada key valid, reload untuk cek lagi
-            if (force && !this.hasValidKey()) {
-                setTimeout(() => this.showApiKeyModal(true), 100);
-            }
-        });
-        
-        modal.querySelector('.api-modal-overlay').addEventListener('click', () => {
-            modal.remove();
+        closeBtn.addEventListener('click', () => modal.remove());
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
         });
         
         // Toggle visibility
         toggleBtn.addEventListener('click', () => {
             const type = input.type === 'password' ? 'text' : 'password';
             input.type = type;
-            toggleBtn.innerHTML = type === 'password' ? 
-                '<i class="fas fa-eye"></i>' : 
-                '<i class="fas fa-eye-slash"></i>';
+            toggleBtn.innerHTML = type === 'password' 
+                ? '<i class="fas fa-eye"></i>' 
+                : '<i class="fas fa-eye-slash"></i>';
         });
         
         // Test connection
         testBtn.addEventListener('click', async () => {
             const key = input.value.trim();
             if (!key || !key.startsWith('sk-')) {
-                this.showTestResult('❌ Format API key tidak valid', 'error');
+                this.showTestResult(testResult, '❌ Please enter a valid API key starting with "sk-"', 'error');
                 return;
             }
+            
+            const model = modal.querySelector('#test-model-select').value;
             
             testBtn.disabled = true;
             testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testing...';
             
-            try {
-                const response = await fetch(CONFIG.API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${key}`
-                    },
-                    body: JSON.stringify({
-                        model: "deepseek-chat",
-                        messages: [{ role: "user", content: "test" }],
-                        max_tokens: 1
-                    })
-                });
+            const result = await DeepSeekAPI.testConnection(key, model);
+            
+            testBtn.disabled = false;
+            testBtn.innerHTML = '<i class="fas fa-bolt"></i> Test Connection';
+            
+            if (result.success) {
+                this.showTestResult(testResult, result.message, 'success');
+                input.style.borderColor = '#10B981';
+            } else {
+                this.showTestResult(testResult, result.message, 'error');
+                input.style.borderColor = '#EF4444';
                 
-                if (response.ok) {
-                    this.showTestResult('✅ API Key valid! Koneksi berhasil.', 'success');
-                    input.style.borderColor = '#4CAF50';
-                } else if (response.status === 401) {
-                    this.showTestResult('❌ API Key tidak valid (401 Unauthorized). Buat API key baru.', 'error');
-                    input.style.borderColor = '#f44336';
-                } else if (response.status === 402) {
-                    this.showTestResult('❌ API Key expired atau kuota habis. Buat API key baru.', 'error');
-                    input.style.borderColor = '#f44336';
-                } else if (response.status === 429) {
-                    this.showTestResult('⚠️ Rate limit exceeded. Tunggu beberapa saat.', 'warning');
-                    input.style.borderColor = '#FF9800';
-                } else {
-                    this.showTestResult(`❌ Error ${response.status}: ${response.statusText}`, 'error');
-                    input.style.borderColor = '#f44336';
+                // If 402, show recharge link
+                if (result.status === 402) {
+                    const rechargeMsg = document.createElement('div');
+                    rechargeMsg.className = 'recharge-msg';
+                    rechargeMsg.innerHTML = `
+                        <p><strong>Need more credits?</strong></p>
+                        <a href="https://platform.deepseek.com/usage" target="_blank" class="recharge-link">
+                            <i class="fas fa-credit-card"></i> Check & Recharge Credits
+                        </a>
+                    `;
+                    testResult.appendChild(rechargeMsg);
                 }
-            } catch (error) {
-                this.showTestResult('❌ Gagal terkoneksi ke server. Cek koneksi internet.', 'error');
-                input.style.borderColor = '#f44336';
-            } finally {
-                testBtn.disabled = false;
-                testBtn.innerHTML = '<i class="fas fa-bolt"></i> Test Connection';
             }
         });
         
         // Save API key
-        saveBtn.addEventListener('click', () => {
+        saveBtn.addEventListener('click', async () => {
             const key = input.value.trim();
-            const result = this.saveApiKey(key);
+            if (!key || !key.startsWith('sk-')) {
+                this.showTestResult(testResult, '❌ Please enter a valid API key', 'error');
+                return;
+            }
             
-            if (result.success) {
-                this.showTestResult('✅ API Key disimpan! Memuat ulang...', 'success');
-                setTimeout(() => location.reload(), 1500);
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            
+            // Test first
+            const testResultApi = await DeepSeekAPI.testConnection(key);
+            
+            if (!testResultApi.success) {
+                this.showTestResult(testResult, testResultApi.message, 'error');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> Save & Start Chatting';
+                return;
+            }
+            
+            // Save if test passed
+            const saveResult = DeepSeekAPI.saveKey(key);
+            
+            if (saveResult.success) {
+                this.showTestResult(testResult, '✅ API key saved successfully!', 'success');
+                
+                // Wait a bit then reload
+                setTimeout(() => {
+                    modal.remove();
+                    location.reload();
+                }, 1500);
             } else {
-                this.showTestResult(`❌ ${result.message}`, 'error');
+                this.showTestResult(testResult, '❌ ' + saveResult.message, 'error');
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '<i class="fas fa-save"></i> Save & Start Chatting';
             }
         });
         
-        // Enter to save
-        input.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                saveBtn.click();
+        // Auto-paste detection
+        input.addEventListener('input', (e) => {
+            const value = e.target.value.trim();
+            if (value.startsWith('sk-') && value.length > 40) {
+                input.style.borderColor = '#3B82F6';
             }
         });
         
@@ -225,684 +408,573 @@ const ApiKeySystem = {
         setTimeout(() => input.focus(), 100);
     },
     
-    showTestResult(message, type = 'info') {
-        const resultDiv = document.getElementById('test-result');
-        if (resultDiv) {
-            resultDiv.textContent = message;
-            resultDiv.className = `test-result ${type}`;
-            resultDiv.style.display = 'block';
-            
-            // Auto hide after 5 seconds
-            setTimeout(() => {
-                if (resultDiv.textContent === message) {
-                    resultDiv.style.display = 'none';
-                }
-            }, 5000);
-        }
-    }
-};
-
-// ==================== STATE MANAGEMENT ====================
-let state = {
-    conversation: [],
-    isTyping: false,
-    isDarkMode: true,
-    isCodingMode: false,
-    currentModel: CONFIG.DEFAULT_MODEL,
-    messageCount: 0,
-    totalTokens: 0,
-    apiConnected: false,
-    settings: {
-        saveHistory: true,
-        autoScroll: true,
-        maxTokens: CONFIG.MAX_TOKENS
-    }
-};
-
-// ==================== DOM ELEMENTS ====================
-const elements = {
-    messageInput: null,
-    sendBtn: null,
-    messagesContainer: null,
-    typingIndicator: null,
-    clearBtn: null,
-    themeBtn: null,
-    codeBtn: null,
-    exportBtn: null,
-    settingsBtn: null,
-    attachBtn: null,
-    voiceBtn: null,
-    messageCount: null,
-    tokenCount: null,
-    apiStatus: null,
-    statusText: null,
-    settingsModal: null,
-    aboutModal: null,
-    privacyModal: null,
-    apiKeyInput: null,
-    toggleKeyBtn: null,
-    modelSelect: null,
-    saveHistoryCheck: null,
-    autoScrollCheck: null,
-    maxTokensRange: null,
-    tokenValue: null,
-    resetBtn: null,
-    saveSettingsBtn: null,
-    privacyBtn: null,
-    aboutBtn: null,
-    toast: null
-};
-
-// ==================== UTILITY FUNCTIONS ====================
-const utils = {
-    showToast(message, type = 'info', duration = 3000) {
-        let toast = document.getElementById('toast-global');
-        if (!toast) {
-            toast = document.createElement('div');
-            toast.id = 'toast-global';
-            toast.className = 'toast';
-            document.body.appendChild(toast);
-        }
-        
-        toast.textContent = message;
-        toast.className = `toast toast-${type} show`;
-        
-        setTimeout(() => {
-            toast.classList.remove('show');
-        }, duration);
-    },
-
-    formatTime(date = new Date()) {
-        return date.toLocaleTimeString('id-ID', {
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    },
-
-    estimateTokens(text) {
-        return Math.ceil(text.length / 4);
-    },
-
-    saveToStorage(key, data) {
-        try {
-            localStorage.setItem(key, JSON.stringify(data));
-            return true;
-        } catch (e) {
-            console.warn('LocalStorage error:', e);
-            this.showToast('Gagal menyimpan data lokal', 'error');
-            return false;
-        }
-    },
-
-    loadFromStorage(key, defaultValue = null) {
-        try {
-            const data = localStorage.getItem(key);
-            return data ? JSON.parse(data) : defaultValue;
-        } catch (e) {
-            console.warn('LocalStorage error:', e);
-            return defaultValue;
-        }
-    }
-};
-
-// ==================== CHAT FUNCTIONS ====================
-const chat = {
-    async init() {
-        // Initialize API key system first
-        ApiKeySystem.init();
-        
-        // Wait a bit for DOM
-        setTimeout(() => {
-            this.initializeElements();
-            this.loadState();
-            this.setupEventListeners();
-            this.testConnection();
-            this.renderConversation();
-            
-            // Auto-focus input if we have valid API key
-            if (ApiKeySystem.hasValidKey() && elements.messageInput) {
-                setTimeout(() => elements.messageInput.focus(), 500);
-            }
-        }, 100);
-        
-        console.log('YinYang Cultivator AI initialized');
-    },
-    
-    initializeElements() {
-        // Map all elements
-        elements.messageInput = document.getElementById('message-input');
-        elements.sendBtn = document.getElementById('send-btn');
-        elements.messagesContainer = document.getElementById('messages-container');
-        elements.typingIndicator = document.getElementById('typing-indicator');
-        elements.clearBtn = document.getElementById('clear-btn');
-        elements.themeBtn = document.getElementById('theme-btn');
-        elements.codeBtn = document.getElementById('code-btn');
-        elements.exportBtn = document.getElementById('export-btn');
-        elements.settingsBtn = document.getElementById('settings-btn');
-        elements.attachBtn = document.getElementById('attach-btn');
-        elements.voiceBtn = document.getElementById('voice-btn');
-        elements.messageCount = document.getElementById('message-count');
-        elements.tokenCount = document.getElementById('token-count');
-        elements.apiStatus = document.getElementById('api-status');
-        elements.statusText = document.getElementById('status-text');
-        elements.settingsModal = document.getElementById('settings-modal');
-        elements.aboutModal = document.getElementById('about-modal');
-        elements.privacyModal = document.getElementById('privacy-modal');
-        elements.apiKeyInput = document.getElementById('api-key-input');
-        elements.toggleKeyBtn = document.getElementById('toggle-key-btn');
-        elements.modelSelect = document.getElementById('model-select');
-        elements.saveHistoryCheck = document.getElementById('save-history');
-        elements.autoScrollCheck = document.getElementById('auto-scroll');
-        elements.maxTokensRange = document.getElementById('max-tokens');
-        elements.tokenValue = document.getElementById('token-value');
-        elements.resetBtn = document.getElementById('reset-btn');
-        elements.saveSettingsBtn = document.getElementById('save-settings');
-        elements.privacyBtn = document.getElementById('privacy-btn');
-        elements.aboutBtn = document.getElementById('about-btn');
-        elements.toast = document.getElementById('toast');
-    },
-
-    loadState() {
-        // Load conversation history
-        if (state.settings.saveHistory) {
-            const savedConv = utils.loadFromStorage('yinyang-conversation', []);
-            state.conversation = savedConv;
-            state.messageCount = savedConv.length;
-            state.totalTokens = savedConv.reduce((sum, msg) => 
-                sum + utils.estimateTokens(msg.content), 0
-            );
-        }
-
-        // Load other settings
-        const savedState = utils.loadFromStorage('yinyang-state');
-        if (savedState) {
-            state = { ...state, ...savedState };
-        }
-
-        // Apply theme
-        if (state.isDarkMode !== undefined) {
-            document.documentElement.setAttribute('data-theme', 
-                state.isDarkMode ? 'dark' : 'light'
-            );
-            this.updateThemeButton();
-        }
-        
-        // Update stats
-        this.updateStats();
-    },
-
-    saveState() {
-        if (state.settings.saveHistory) {
-            utils.saveToStorage('yinyang-conversation', state.conversation);
-        }
-        utils.saveToStorage('yinyang-state', {
-            isDarkMode: state.isDarkMode,
-            isCodingMode: state.isCodingMode,
-            currentModel: state.currentModel,
-            messageCount: state.messageCount,
-            totalTokens: state.totalTokens,
-            settings: state.settings
-        });
-    },
-
-    async testConnection() {
-        if (!ApiKeySystem.hasValidKey()) {
-            elements.statusText.textContent = 'API Key Required';
-            elements.apiStatus.textContent = 'API: Not Set';
-            elements.apiStatus.style.color = 'var(--warning)';
-            state.apiConnected = false;
-            return;
-        }
-
-        try {
-            const response = await fetch(CONFIG.API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${ApiKeySystem.getApiKey()}`
-                },
-                body: JSON.stringify({
-                    model: state.currentModel,
-                    messages: [{ role: "user", content: "test" }],
-                    max_tokens: 1
-                })
-            });
-
-            state.apiConnected = response.ok;
-            
-            if (state.apiConnected) {
-                elements.statusText.textContent = 'API Connected';
-                elements.apiStatus.textContent = 'API: Active';
-                elements.apiStatus.style.color = 'var(--success)';
-            } else {
-                elements.statusText.textContent = `API Error: ${response.status}`;
-                elements.apiStatus.textContent = 'API: Error';
-                elements.apiStatus.style.color = 'var(--error)';
-                
-                // Show API key modal if unauthorized
-                if (response.status === 401 || response.status === 402) {
-                    setTimeout(() => ApiKeySystem.showApiKeyModal(true), 1000);
-                }
-            }
-        } catch (error) {
-            state.apiConnected = false;
-            elements.statusText.textContent = 'API Offline';
-            elements.apiStatus.textContent = 'API: Offline';
-            elements.apiStatus.style.color = 'var(--warning)';
-        }
-    },
-
-    async sendMessage() {
-        // Check API key first
-        if (!ApiKeySystem.hasValidKey()) {
-            utils.showToast('API Key belum diatur. Silakan atur API Key terlebih dahulu.', 'error');
-            ApiKeySystem.showApiKeyModal(true);
-            return;
-        }
-
-        if (!elements.messageInput) {
-            this.initializeElements();
-        }
-
-        const message = elements.messageInput.value.trim();
-        if (!message || state.isTyping) return;
-
-        // Add user message
-        this.addMessage('user', message);
-        elements.messageInput.value = '';
-        this.adjustTextareaHeight();
-        
-        // Disable input
-        state.isTyping = true;
-        elements.messageInput.disabled = true;
-        elements.sendBtn.disabled = true;
-        if (elements.typingIndicator) {
-            elements.typingIndicator.classList.add('active');
-        }
-
-        // Add to conversation
-        state.conversation.push({
-            role: 'user',
-            content: message,
-            timestamp: new Date().toISOString()
-        });
-
-        state.messageCount++;
-        state.totalTokens += utils.estimateTokens(message);
-        this.updateStats();
-
-        try {
-            // Prepare messages
-            let messages = [...state.conversation];
-            if (state.isCodingMode) {
-                messages.unshift({
-                    role: 'system',
-                    content: 'You are a coding assistant. Provide code solutions with explanations.'
-                });
-            }
-
-            const response = await fetch(CONFIG.API_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${ApiKeySystem.getApiKey()}`
-                },
-                body: JSON.stringify({
-                    model: state.currentModel,
-                    messages: messages.map(msg => ({
-                        role: msg.role,
-                        content: msg.content
-                    })),
-                    max_tokens: state.settings.maxTokens,
-                    temperature: 0.7,
-                    stream: false
-                })
-            });
-
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`API Error ${response.status}: ${errorText}`);
-            }
-
-            const data = await response.json();
-            const botReply = data.choices[0].message.content;
-
-            // Add bot message
-            this.addMessage('bot', botReply);
-            
-            // Update conversation
-            state.conversation.push({
-                role: 'assistant',
-                content: botReply,
-                timestamp: new Date().toISOString()
-            });
-
-            state.messageCount++;
-            state.totalTokens += utils.estimateTokens(botReply);
-            this.updateStats();
-
-            // Save state
-            this.saveState();
-
-            // Update API status
-            elements.statusText.textContent = 'API Connected';
-            elements.apiStatus.textContent = 'API: Active';
-            elements.apiStatus.style.color = 'var(--success)';
-
-        } catch (error) {
-            console.error('Chat error:', error);
-            
-            let errorMessage = `⚠️ **Error:** ${error.message}\n\n`;
-            
-            if (error.message.includes('401')) {
-                errorMessage += 'API Key tidak valid atau sudah expired. Silakan buat API Key baru di Settings.';
-                ApiKeySystem.showApiKeyModal(true);
-            } else if (error.message.includes('402')) {
-                errorMessage += 'Kuota API Key habis. Silakan buat API Key baru.';
-                ApiKeySystem.showApiKeyModal(true);
-            } else if (error.message.includes('429')) {
-                errorMessage += 'Terlalu banyak permintaan. Tunggu beberapa saat.';
-            } else {
-                errorMessage += 'Silakan cek koneksi internet atau coba lagi nanti.';
-            }
-            
-            this.addMessage('bot', errorMessage);
-            
-            elements.statusText.textContent = 'API Error';
-            elements.apiStatus.textContent = 'API: Error';
-            elements.apiStatus.style.color = 'var(--error)';
-            
-            utils.showToast('Gagal mengirim pesan', 'error');
-            
-        } finally {
-            // Re-enable input
-            state.isTyping = false;
-            if (elements.messageInput) {
-                elements.messageInput.disabled = false;
-                elements.messageInput.focus();
-            }
-            if (elements.sendBtn) elements.sendBtn.disabled = false;
-            if (elements.typingIndicator) {
-                elements.typingIndicator.classList.remove('active');
-            }
-            
-            // Auto-scroll
-            if (state.settings.autoScroll && elements.messagesContainer) {
-                elements.messagesContainer.scrollTop = elements.messagesContainer.scrollHeight;
-            }
-        }
-    },
-
-    addMessage(role, content) {
-        if (!elements.messagesContainer) {
-            console.error('Messages container not found');
-            return;
-        }
-        
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${role}`;
-        
-        const avatarIcon = role === 'user' ? 'fas fa-user' : 'fas fa-yin-yang';
-        const time = utils.formatTime();
-        
-        // Format content
-        const formattedContent = content
-            .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-            .replace(/`([^`]+)`/g, '<code>$1</code>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\n/g, '<br>');
-        
-        messageDiv.innerHTML = `
-            <div class="avatar">
-                <i class="${avatarIcon}"></i>
-            </div>
-            <div class="message-content">
-                ${formattedContent}
-                <div class="message-time">${time}</div>
+    showTestResult(container, message, type) {
+        container.innerHTML = '';
+        const resultDiv = document.createElement('div');
+        resultDiv.className = `test-result-${type}`;
+        resultDiv.innerHTML = `
+            <div class="result-content">
+                <i class="fas fa-${type === 'success' ? 'check-circle' : 'exclamation-circle'}"></i>
+                <span>${message}</span>
             </div>
         `;
-        
-        elements.messagesContainer.appendChild(messageDiv);
-        
-        // Auto-scroll
-        if (state.settings.autoScroll) {
-            setTimeout(() => {
-                messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
-            }, 100);
-        }
-    },
+        container.appendChild(resultDiv);
+    }
+};
 
-    renderConversation() {
-        if (!elements.messagesContainer) return;
+// ==================== CHAT APPLICATION ====================
+class ChatApp {
+    constructor() {
+        this.apiKey = null;
+        this.model = CONFIG.DEFAULT_MODEL;
+        this.conversation = [];
+        this.isTyping = false;
+        this.isDarkMode = true;
         
-        elements.messagesContainer.innerHTML = '';
-        
-        if (state.conversation.length === 0) {
-            const hasKey = ApiKeySystem.hasValidKey();
-            const status = hasKey ? '✅ Terhubung' : '❌ Belum diatur';
+        // DOM Elements
+        this.elements = {};
+        this.initializeElements();
+    }
+    
+    initializeElements() {
+        this.elements = {
+            // Chat elements
+            messageInput: document.getElementById('message-input'),
+            sendBtn: document.getElementById('send-btn'),
+            messagesContainer: document.getElementById('messages-container'),
+            typingIndicator: document.getElementById('typing-indicator'),
             
-            this.addMessage('bot', 
-                `🎯 **Selamat datang di YinYang AI!**\n\n` +
-                `**Status API:** ${status}\n\n` +
-                `${
-                    hasKey 
-                    ? '✨ **Siap membantu Anda!** Coba tanyakan sesuatu.'
-                    : '🔑 **Langkah pertama:** Klik tombol Settings (⚙️) di bawah untuk memasukkan API Key Anda.'
-                }\n\n` +
-                `📱 **Tips:**\n` +
-                `• Enter untuk kirim, Shift+Enter untuk baris baru\n` +
-                `• Gunakan \`code\` untuk format kode\n` +
-                `• Clear chat untuk memulai percakapan baru`
-            );
+            // Control elements
+            clearBtn: document.getElementById('clear-btn'),
+            themeBtn: document.getElementById('theme-btn'),
+            settingsBtn: document.getElementById('settings-btn'),
+            
+            // Status elements
+            apiStatus: document.getElementById('api-status'),
+            modelInfo: document.getElementById('model-info'),
+            
+            // Settings modal elements
+            settingsModal: document.getElementById('settings-modal'),
+            currentApiKey: document.getElementById('current-api-key'),
+            modelSelect: document.getElementById('model-select'),
+            saveSettingsBtn: document.getElementById('save-settings'),
+            closeSettings: document.querySelector('.modal-close')
+        };
+    }
+    
+    async init() {
+        console.log('Initializing DeepKu AI Chat...');
+        
+        // Load API key
+        this.apiKey = DeepSeekAPI.getKey();
+        
+        // Check if API key exists
+        if (!this.apiKey) {
+            console.log('No API key found, showing modal...');
+            setTimeout(() => UI.showApiKeyModal(), 1000);
         } else {
-            state.conversation.forEach(msg => {
-                this.addMessage(msg.role, msg.content);
-            });
+            console.log('API key found, testing connection...');
+            await this.testApiConnection();
         }
-    },
-
-    clearConversation() {
-        if (confirm('Hapus seluruh percakapan?')) {
-            state.conversation = [];
-            state.messageCount = 0;
-            state.totalTokens = 0;
+        
+        // Load saved conversation
+        this.loadConversation();
+        
+        // Setup event listeners
+        this.setupEventListeners();
+        
+        // Apply theme
+        this.applyTheme();
+        
+        // Update UI
+        this.updateUI();
+        
+        console.log('Chat app initialized successfully');
+    }
+    
+    async testApiConnection() {
+        if (!this.apiKey) return false;
+        
+        const testResult = await DeepSeekAPI.testConnection(this.apiKey, this.model);
+        
+        if (testResult.success) {
+            this.elements.apiStatus.textContent = '✅ Connected';
+            this.elements.apiStatus.className = 'status-connected';
+            return true;
+        } else {
+            this.elements.apiStatus.textContent = '❌ Error: ' + testResult.message;
+            this.elements.apiStatus.className = 'status-error';
             
-            utils.saveToStorage('yinyang-conversation', []);
-            this.renderConversation();
-            this.updateStats();
+            // Show API key modal if error
+            if (testResult.status === 401 || testResult.status === 402) {
+                setTimeout(() => UI.showApiKeyModal(), 1500);
+            }
             
-            utils.showToast('Percakapan dibersihkan', 'success');
+            return false;
         }
-    },
-
-    toggleTheme() {
-        state.isDarkMode = !state.isDarkMode;
-        document.documentElement.setAttribute('data-theme', 
-            state.isDarkMode ? 'dark' : 'light'
-        );
-        
-        this.updateThemeButton();
-        this.saveState();
-        
-        utils.showToast(
-            `Mode ${state.isDarkMode ? 'gelap' : 'terang'} diaktifkan`,
-            'success'
-        );
-    },
-
-    updateThemeButton() {
-        if (!elements.themeBtn) return;
-        const icon = state.isDarkMode ? 'fa-sun' : 'fa-moon';
-        elements.themeBtn.innerHTML = `<i class="fas ${icon}"></i> Tema`;
-    },
-
-    toggleCodingMode() {
-        state.isCodingMode = !state.isCodingMode;
-        
-        if (!elements.codeBtn) return;
-        const icon = state.isCodingMode ? 'fa-keyboard' : 'fa-code';
-        elements.codeBtn.innerHTML = `<i class="fas ${icon}"></i> ${
-            state.isCodingMode ? 'Normal Mode' : 'Coding Mode'
-        }`;
-        
-        utils.showToast(
-            `Mode ${state.isCodingMode ? 'coding' : 'normal'} diaktifkan`,
-            'success'
-        );
-    },
-
-    updateStats() {
-        if (elements.messageCount) {
-            elements.messageCount.textContent = `${state.messageCount} Pesan`;
-        }
-        if (elements.tokenCount) {
-            elements.tokenCount.textContent = `~${state.totalTokens} Token`;
-        }
-    },
-
-    adjustTextareaHeight() {
-        if (!elements.messageInput) return;
-        const textarea = elements.messageInput;
-        textarea.style.height = 'auto';
-        textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
-    },
-
+    }
+    
     setupEventListeners() {
-        // Basic event listeners
-        if (elements.sendBtn) {
-            elements.sendBtn.addEventListener('click', () => this.sendMessage());
+        // Send message
+        if (this.elements.sendBtn) {
+            this.elements.sendBtn.addEventListener('click', () => this.sendMessage());
         }
         
-        if (elements.messageInput) {
-            elements.messageInput.addEventListener('keydown', (e) => {
+        // Enter to send
+        if (this.elements.messageInput) {
+            this.elements.messageInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     this.sendMessage();
                 }
             });
             
-            elements.messageInput.addEventListener('input', () => this.adjustTextareaHeight());
-        }
-        
-        if (elements.clearBtn) {
-            elements.clearBtn.addEventListener('click', () => this.clearConversation());
-        }
-        
-        if (elements.themeBtn) {
-            elements.themeBtn.addEventListener('click', () => this.toggleTheme());
-        }
-        
-        if (elements.codeBtn) {
-            elements.codeBtn.addEventListener('click', () => this.toggleCodingMode());
-        }
-        
-        // Settings modal
-        if (elements.settingsBtn) {
-            elements.settingsBtn.addEventListener('click', () => this.openSettings());
-        }
-        
-        // Other buttons
-        if (elements.exportBtn) {
-            elements.exportBtn.addEventListener('click', () => {
-                utils.showToast('Fitur export dalam pengembangan', 'info');
+            // Auto-resize
+            this.elements.messageInput.addEventListener('input', () => {
+                this.elements.messageInput.style.height = 'auto';
+                this.elements.messageInput.style.height = 
+                    Math.min(this.elements.messageInput.scrollHeight, 200) + 'px';
             });
         }
         
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            // Ctrl/Cmd + / for settings
-            if ((e.ctrlKey || e.metaKey) && e.key === '/') {
-                e.preventDefault();
-                this.openSettings();
+        // Clear chat
+        if (this.elements.clearBtn) {
+            this.elements.clearBtn.addEventListener('click', () => this.clearChat());
+        }
+        
+        // Toggle theme
+        if (this.elements.themeBtn) {
+            this.elements.themeBtn.addEventListener('click', () => this.toggleTheme());
+        }
+        
+        // Settings
+        if (this.elements.settingsBtn) {
+            this.elements.settingsBtn.addEventListener('click', () => this.openSettings());
+        }
+        
+        // Settings modal events
+        if (this.elements.saveSettingsBtn) {
+            this.elements.saveSettingsBtn.addEventListener('click', () => this.saveSettings());
+        }
+        
+        if (this.elements.closeSettings) {
+            this.elements.closeSettings.addEventListener('click', () => {
+                this.elements.settingsModal.classList.remove('active');
+            });
+        }
+    }
+    
+    async sendMessage() {
+        // Check if we have API key
+        if (!this.apiKey) {
+            UI.showToast('Please set up your API key first', 'error');
+            UI.showApiKeyModal();
+            return;
+        }
+        
+        // Get message
+        const message = this.elements.messageInput?.value.trim();
+        if (!message || this.isTyping) return;
+        
+        // Clear input
+        if (this.elements.messageInput) {
+            this.elements.messageInput.value = '';
+            this.elements.messageInput.style.height = 'auto';
+        }
+        
+        // Add user message to UI
+        this.addMessage('user', message);
+        
+        // Add to conversation
+        this.conversation.push({
+            role: 'user',
+            content: message,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Show typing indicator
+        this.showTyping(true);
+        
+        try {
+            // Prepare messages for API
+            const messages = this.conversation.map(msg => ({
+                role: msg.role,
+                content: msg.content
+            }));
+            
+            // Send to API
+            const result = await DeepSeekAPI.sendMessage(
+                this.apiKey, 
+                messages, 
+                this.model,
+                CONFIG.MAX_TOKENS
+            );
+            
+            if (result.success) {
+                const botReply = result.message;
+                
+                // Add bot message to UI
+                this.addMessage('bot', botReply);
+                
+                // Add to conversation
+                this.conversation.push({
+                    role: 'assistant',
+                    content: botReply,
+                    timestamp: new Date().toISOString()
+                });
+                
+                // Save conversation
+                this.saveConversation();
+                
+                // Update API status
+                this.elements.apiStatus.textContent = '✅ Connected';
+                this.elements.apiStatus.className = 'status-connected';
+                
+            } else {
+                throw new Error(result.error || 'Failed to get response');
             }
             
-            // Esc to close modals
-            if (e.key === 'Escape') {
-                this.closeModals();
+        } catch (error) {
+            console.error('Send message error:', error);
+            
+            // Show error message
+            let errorMsg = 'Error: ' + error.message;
+            if (error.message.includes('402')) {
+                errorMsg = 'API credits exhausted. Please recharge at platform.deepseek.com';
+            } else if (error.message.includes('401')) {
+                errorMsg = 'API key invalid. Please update your API key.';
+                this.apiKey = null;
+                localStorage.removeItem(DeepSeekAPI.STORAGE_KEY);
             }
-        });
-    },
-
-    openSettings() {
-        // Use our API key modal instead
-        ApiKeySystem.showApiKeyModal(true);
-    },
-
-    closeModals() {
-        const modals = document.querySelectorAll('.api-key-modal-main, .modal.active');
-        modals.forEach(modal => modal.remove());
+            
+            this.addMessage('bot', `⚠️ **Error:** ${errorMsg}`);
+            
+            // Update API status
+            this.elements.apiStatus.textContent = '❌ API Error';
+            this.elements.apiStatus.className = 'status-error';
+            
+            UI.showToast(errorMsg, 'error');
+            
+        } finally {
+            this.showTyping(false);
+        }
     }
-};
+    
+    addMessage(role, content) {
+        if (!this.elements.messagesContainer) return;
+        
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${role}`;
+        
+        const avatar = role === 'user' ? '👤' : '⚫';
+        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        
+        // Format content (basic markdown)
+        let formattedContent = content
+            .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+            .replace(/`([^`]+)`/g, '<code>$1</code>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\n/g, '<br>');
+        
+        messageDiv.innerHTML = `
+            <div class="avatar">${avatar}</div>
+            <div class="message-content">
+                <div class="message-text">${formattedContent}</div>
+                <div class="message-time">${time}</div>
+            </div>
+        `;
+        
+        this.elements.messagesContainer.appendChild(messageDiv);
+        
+        // Scroll to bottom
+        setTimeout(() => {
+            messageDiv.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }, 100);
+    }
+    
+    showTyping(show) {
+        this.isTyping = show;
+        
+        if (this.elements.typingIndicator) {
+            if (show) {
+                this.elements.typingIndicator.classList.add('active');
+            } else {
+                this.elements.typingIndicator.classList.remove('active');
+            }
+        }
+        
+        if (this.elements.sendBtn) {
+            this.elements.sendBtn.disabled = show;
+        }
+        
+        if (this.elements.messageInput) {
+            this.elements.messageInput.disabled = show;
+        }
+    }
+    
+    clearChat() {
+        if (this.conversation.length === 0) return;
+        
+        if (confirm('Clear all messages?')) {
+            this.conversation = [];
+            if (this.elements.messagesContainer) {
+                this.elements.messagesContainer.innerHTML = '';
+            }
+            this.saveConversation();
+            UI.showToast('Chat cleared', 'success');
+        }
+    }
+    
+    toggleTheme() {
+        this.isDarkMode = !this.isDarkMode;
+        this.applyTheme();
+        
+        // Save theme preference
+        localStorage.setItem('chat_theme', this.isDarkMode ? 'dark' : 'light');
+        
+        UI.showToast(`Switched to ${this.isDarkMode ? 'dark' : 'light'} mode`, 'success');
+    }
+    
+    applyTheme() {
+        document.documentElement.setAttribute('data-theme', 
+            this.isDarkMode ? 'dark' : 'light'
+        );
+        
+        // Update theme button
+        if (this.elements.themeBtn) {
+            const icon = this.isDarkMode ? 'fa-sun' : 'fa-moon';
+            this.elements.themeBtn.innerHTML = `<i class="fas ${icon}"></i> Theme`;
+        }
+    }
+    
+    openSettings() {
+        if (!this.elements.settingsModal) return;
+        
+        // Populate settings
+        if (this.elements.currentApiKey) {
+            this.elements.currentApiKey.value = this.apiKey 
+                ? this.apiKey.substring(0, 8) + '...' + this.apiKey.substring(this.apiKey.length - 4)
+                : 'Not set';
+        }
+        
+        if (this.elements.modelSelect) {
+            this.elements.modelSelect.innerHTML = CONFIG.MODELS
+                .map(m => `<option value="${m.id}" ${m.id === this.model ? 'selected' : ''}>${m.name}</option>`)
+                .join('');
+        }
+        
+        this.elements.settingsModal.classList.add('active');
+    }
+    
+    saveSettings() {
+        // Update model
+        if (this.elements.modelSelect) {
+            this.model = this.elements.modelSelect.value;
+            localStorage.setItem('chat_model', this.model);
+            
+            // Update model info
+            if (this.elements.modelInfo) {
+                const selectedModel = CONFIG.MODELS.find(m => m.id === this.model);
+                this.elements.modelInfo.textContent = selectedModel ? selectedModel.name : this.model;
+            }
+        }
+        
+        this.elements.settingsModal.classList.remove('active');
+        UI.showToast('Settings saved', 'success');
+        
+        // Test connection with new model
+        if (this.apiKey) {
+            this.testApiConnection();
+        }
+    }
+    
+    loadConversation() {
+        try {
+            const saved = localStorage.getItem('chat_conversation');
+            if (saved) {
+                this.conversation = JSON.parse(saved) || [];
+                
+                // Render existing messages
+                if (this.elements.messagesContainer && this.conversation.length > 0) {
+                    this.conversation.forEach(msg => {
+                        this.addMessage(msg.role, msg.content);
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Error loading conversation:', e);
+            this.conversation = [];
+        }
+        
+        // Load theme
+        const savedTheme = localStorage.getItem('chat_theme');
+        if (savedTheme) {
+            this.isDarkMode = savedTheme === 'dark';
+        }
+        
+        // Load model
+        const savedModel = localStorage.getItem('chat_model');
+        if (savedModel && CONFIG.MODELS.some(m => m.id === savedModel)) {
+            this.model = savedModel;
+        }
+    }
+    
+    saveConversation() {
+        try {
+            // Only save last 50 messages to avoid localStorage limits
+            const toSave = this.conversation.slice(-50);
+            localStorage.setItem('chat_conversation', JSON.stringify(toSave));
+        } catch (e) {
+            console.error('Error saving conversation:', e);
+        }
+    }
+    
+    updateUI() {
+        // Update model info
+        if (this.elements.modelInfo) {
+            const selectedModel = CONFIG.MODELS.find(m => m.id === this.model);
+            this.elements.modelInfo.textContent = selectedModel ? selectedModel.name : this.model;
+        }
+        
+        // Update API status
+        if (this.apiKey) {
+            this.elements.apiStatus.textContent = 'Checking...';
+            this.elements.apiStatus.className = 'status-checking';
+        } else {
+            this.elements.apiStatus.textContent = '❌ No API Key';
+            this.elements.apiStatus.className = 'status-error';
+        }
+    }
+}
 
-// ==================== INITIALIZATION ====================
+// ==================== INITIALIZE APP ====================
 document.addEventListener('DOMContentLoaded', () => {
-    // Add global CSS for API key modal
+    const app = new ChatApp();
+    window.chatApp = app; // Make accessible globally
+    
+    // Start the app
+    setTimeout(() => app.init(), 500);
+    
+    // Add keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+        // Ctrl/Cmd + / for settings
+        if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+            e.preventDefault();
+            app.openSettings();
+        }
+        
+        // Ctrl/Cmd + K to clear
+        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+            e.preventDefault();
+            app.clearChat();
+        }
+        
+        // Escape to close modals
+        if (e.key === 'Escape') {
+            const modals = document.querySelectorAll('.modal.active, .api-modal-overlay');
+            modals.forEach(modal => modal.remove());
+        }
+    });
+    
+    // Global function to show API key modal
+    window.showApiKeyModal = () => UI.showApiKeyModal();
+});
+
+// ==================== ADD STYLES ====================
+const addStyles = () => {
     const style = document.createElement('style');
     style.textContent = `
-        .api-key-modal-main {
+        /* Toast Messages */
+        .toast-message {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--yin);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            padding: 15px 20px;
+            color: var(--yang);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            z-index: 10000;
+            transform: translateY(-100px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            max-width: 400px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        
+        .toast-message.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        
+        .toast-success {
+            border-left: 4px solid #10B981;
+        }
+        
+        .toast-error {
+            border-left: 4px solid #EF4444;
+        }
+        
+        .toast-info {
+            border-left: 4px solid #3B82F6;
+        }
+        
+        /* API Key Modal */
+        .api-modal-overlay {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
             z-index: 9999;
             display: flex;
             align-items: center;
             justify-content: center;
+            padding: 20px;
+            animation: fadeIn 0.3s ease;
         }
         
-        .api-modal-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(5px);
-        }
-        
-        .api-modal-content {
-            position: relative;
+        .api-modal {
             background: var(--yin);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 15px;
-            width: 90%;
-            max-width: 500px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 600px;
             max-height: 90vh;
             overflow-y: auto;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            animation: modalSlideIn 0.3s ease;
-        }
-        
-        @keyframes modalSlideIn {
-            from { opacity: 0; transform: translateY(-20px); }
-            to { opacity: 1; transform: translateY(0); }
+            animation: slideUp 0.3s ease;
         }
         
         .api-modal-header {
+            padding: 25px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
         
         .api-modal-header h3 {
             color: var(--yang);
+            font-size: 1.5rem;
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 1.3rem;
+            gap: 12px;
         }
         
-        .api-modal-close {
+        .close-modal {
             background: none;
             border: none;
             color: var(--yang);
-            font-size: 1.5rem;
+            font-size: 1.8rem;
             cursor: pointer;
-            width: 30px;
-            height: 30px;
+            width: 40px;
+            height: 40px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -910,156 +982,225 @@ document.addEventListener('DOMContentLoaded', () => {
             transition: all 0.2s;
         }
         
-        .api-modal-close:hover {
+        .close-modal:hover {
             background: rgba(255, 255, 255, 0.1);
         }
         
         .api-modal-body {
-            padding: 20px;
+            padding: 30px;
         }
         
-        .api-modal-body p {
-            color: var(--accent);
-            margin-bottom: 20px;
-            line-height: 1.5;
+        .setup-steps {
+            margin-bottom: 30px;
         }
         
-        .api-key-input-group {
-            margin-bottom: 20px;
+        .step {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 25px;
+            padding-bottom: 25px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
         }
         
-        .api-key-input-group label {
-            display: block;
+        .step:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        .step-number {
+            width: 36px;
+            height: 36px;
+            background: var(--accent);
+            color: var(--yin);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            flex-shrink: 0;
+        }
+        
+        .step-content h4 {
             color: var(--yang);
             margin-bottom: 8px;
+            font-size: 1.1rem;
+        }
+        
+        .step-content p {
+            color: var(--accent);
+            line-height: 1.5;
+            margin-bottom: 8px;
+        }
+        
+        .api-link {
+            color: var(--accent);
+            text-decoration: underline;
             font-weight: 500;
         }
         
-        .input-with-button {
+        .api-key-input-container {
             display: flex;
             gap: 10px;
-            margin-bottom: 8px;
+            margin-top: 10px;
         }
         
-        .input-with-button input {
+        .api-key-input {
             flex: 1;
-            padding: 12px 15px;
+            padding: 12px 16px;
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
+            border-radius: 10px;
             color: var(--yang);
-            font-size: 1rem;
+            font-family: monospace;
+            font-size: 0.95rem;
         }
         
-        .input-with-button input:focus {
+        .api-key-input:focus {
             outline: none;
             border-color: var(--accent);
         }
         
-        .input-with-button button {
-            padding: 0 15px;
+        .toggle-btn {
+            padding: 0 20px;
             background: rgba(255, 255, 255, 0.1);
             border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 8px;
+            border-radius: 10px;
             color: var(--yang);
             cursor: pointer;
         }
         
-        .api-key-hint {
-            display: block;
-            font-size: 0.85rem;
-            color: var(--accent-light);
+        .test-section {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
         }
         
-        .api-key-hint a {
-            color: var(--accent);
-            text-decoration: underline;
+        .model-select {
+            flex: 1;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: var(--yang);
+        }
+        
+        .test-btn {
+            padding: 10px 20px;
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            border-radius: 8px;
+            color: #3B82F6;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+        
+        .test-btn:hover:not(:disabled) {
+            background: rgba(59, 130, 246, 0.3);
+        }
+        
+        .test-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
         
         .test-result {
-            display: none;
-            padding: 10px 15px;
+            margin-top: 15px;
+            min-height: 50px;
+        }
+        
+        .test-result-success,
+        .test-result-error {
+            padding: 12px 16px;
             border-radius: 8px;
-            margin: 15px 0;
-            font-size: 0.9rem;
-        }
-        
-        .test-result.success {
-            display: block;
-            background: rgba(76, 175, 80, 0.1);
-            border: 1px solid rgba(76, 175, 80, 0.3);
-            color: #4CAF50;
-        }
-        
-        .test-result.error {
-            display: block;
-            background: rgba(244, 67, 54, 0.1);
-            border: 1px solid rgba(244, 67, 54, 0.3);
-            color: #f44336;
-        }
-        
-        .test-result.warning {
-            display: block;
-            background: rgba(255, 152, 0, 0.1);
-            border: 1px solid rgba(255, 152, 0, 0.3);
-            color: #FF9800;
-        }
-        
-        .api-modal-actions {
             display: flex;
+            align-items: center;
             gap: 10px;
-            margin: 20px 0;
         }
         
-        .api-modal-actions button {
+        .test-result-success {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: #10B981;
+        }
+        
+        .test-result-error {
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            color: #EF4444;
+        }
+        
+        .recharge-msg {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(239, 68, 68, 0.05);
+            border-radius: 6px;
+        }
+        
+        .recharge-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #EF4444;
+            text-decoration: none;
+            margin-top: 5px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: rgba(239, 68, 68, 0.1);
+        }
+        
+        .modal-actions {
+            display: flex;
+            gap: 15px;
+            margin: 30px 0;
+        }
+        
+        .save-btn {
             flex: 1;
-            padding: 12px;
-            border-radius: 8px;
+            padding: 15px;
+            border-radius: 10px;
             border: none;
             cursor: pointer;
             font-weight: 500;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
+            gap: 10px;
             transition: all 0.2s;
         }
         
-        .btn-primary {
+        .save-btn.primary {
             background: var(--accent);
             color: var(--yin);
         }
         
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.1);
+        .save-btn.secondary {
+            background: rgba(255, 255, 255, 0.05);
             color: var(--yang);
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        .api-modal-actions button:hover {
+        .save-btn:hover {
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-        }
-        
-        .api-modal-actions button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none !important;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
         }
         
         .api-tips {
-            margin-top: 25px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
             border-left: 4px solid var(--accent);
         }
         
         .api-tips h4 {
             color: var(--yang);
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
         }
         
         .api-tips ul {
@@ -1068,63 +1209,70 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         .api-tips li {
-            margin-bottom: 5px;
-            font-size: 0.9rem;
+            margin-bottom: 8px;
+            line-height: 1.5;
         }
         
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--yin);
-            color: var(--yang);
-            padding: 12px 20px;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-            display: none;
-            z-index: 10000;
-            max-width: 400px;
+        /* Status Indicators */
+        .status-connected {
+            color: #10B981;
         }
         
-        .toast.show {
-            display: block;
-            animation: toastSlideIn 0.3s ease;
+        .status-error {
+            color: #EF4444;
         }
         
-        @keyframes toastSlideIn {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        .status-checking {
+            color: #F59E0B;
         }
         
-        .toast-success {
-            border-left: 4px solid #4CAF50;
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
         }
         
-        .toast-error {
-            border-left: 4px solid #f44336;
+        @keyframes slideUp {
+            from { 
+                opacity: 0; 
+                transform: translateY(50px); 
+            }
+            to { 
+                opacity: 1; 
+                transform: translateY(0); 
+            }
         }
         
-        .toast-info {
-            border-left: 4px solid var(--accent);
-        }
-        
-        .toast-warning {
-            border-left: 4px solid #FF9800;
+        /* Responsive */
+        @media (max-width: 768px) {
+            .api-modal {
+                margin: 10px;
+            }
+            
+            .api-modal-header {
+                padding: 20px;
+            }
+            
+            .api-modal-body {
+                padding: 20px;
+            }
+            
+            .modal-actions {
+                flex-direction: column;
+            }
+            
+            .test-section {
+                flex-direction: column;
+            }
         }
     `;
+    
     document.head.appendChild(style);
-    
-    // Initialize chat
-    chat.init();
-    
-    // Clear any broken API keys on load
-    setTimeout(() => {
-        const brokenKey = "sk-ce242eb3749d4b9c88f6416b008d6836";
-        const currentKey = localStorage.getItem('deepseek_api_key_v2');
-        if (currentKey === brokenKey) {
-            localStorage.removeItem('deepseek_api_key_v2');
-            ApiKeySystem.showApiKeyModal(true);
-        }
-    }, 500);
-});
+};
+
+// Add styles when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', addStyles);
+} else {
+    addStyles();
+}
