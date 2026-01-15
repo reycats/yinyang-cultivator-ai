@@ -3,78 +3,82 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚫⚪ YinYang Cultivator AI</title>
-    <meta name="description" content="AI Assistant dengan tema Yin Yang yang seimbang">
-    <meta name="theme-color" content="#0a0a0a">
+    <title>⚫⚪ DeepKu AI Chat</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
-    <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="assets/yin-yang.svg" type="image/svg+xml">
 </head>
 <body>
+    <!-- Background Elements -->
     <div class="yin-yang-bg"></div>
     <div class="floating-particles"></div>
     
+    <!-- Main Container -->
     <div class="container">
+        <!-- Header -->
         <header>
             <div class="logo">
-                <div class="yin-yang-symbol">
-                    <div class="yin-dot"></div>
-                    <div class="yang-dot"></div>
+                <img src="assets/yin-yang.svg" alt="Yin Yang" class="yin-yang-logo">
+                <div class="logo-text">
+                    <h1>DeepKu AI</h1>
+                    <p class="tagline">Harmoni dalam Dialog</p>
                 </div>
-                <h1>YinYang Cultivator AI</h1>
             </div>
-            <p class="subtitle">Harmoni dalam Dualitas · Keseimbangan dalam Dialog</p>
+            <p class="subtitle">AI Assistant dengan tema Yin Yang</p>
         </header>
         
+        <!-- Chat Container -->
         <div class="chat-container">
             <div class="chat-header">
                 <div class="model-info">
-                    <span class="model-tag">DeepSeek-Latest</span>
-                    <span>⚡ Real-time AI Assistant</span>
+                    <span class="model-tag" id="model-info">DeepSeek Chat</span>
+                    <span>⚡ AI Assistant</span>
                 </div>
                 <div class="status">
-                    <div class="status-dot"></div>
-                    <span id="status-text">API Connected</span>
+                    <div class="status-dot" id="status-dot"></div>
+                    <span id="api-status">Checking...</span>
                 </div>
             </div>
             
+            <!-- Messages Container -->
             <div class="messages-container" id="messages-container">
-                <!-- Messages will appear here -->
-                <div class="message bot welcome-message">
+                <!-- Messages will be inserted here by JavaScript -->
+                <div class="message bot">
                     <div class="avatar">
                         <i class="fas fa-yin-yang"></i>
                     </div>
                     <div class="message-content">
-                        <p>🎯 <strong>Selamat datang, Cultivator.</strong> Saya adalah asisten AI dengan tema Yin Yang yang seimbang.</p>
-                        <p>✨ <strong>Fitur:</strong> Diskusi mendalam, bantuan coding, analisis teks, dan konsultasi filosofis.</p>
-                        <p>📱 <strong>Tips:</strong> Tekan Enter untuk mengirim, Shift+Enter untuk baris baru</p>
+                        <p>🎯 <strong>Selamat datang di DeepKu AI!</strong></p>
+                        <p>Saya adalah asisten AI dengan tema Yin Yang yang seimbang.</p>
+                        <p>🔑 <strong>Langkah pertama:</strong> Klik tombol Settings (⚙️) di bawah untuk memasukkan API Key Anda.</p>
                     </div>
                 </div>
             </div>
             
+            <!-- Typing Indicator -->
             <div class="typing-indicator" id="typing-indicator">
                 <div class="typing-dots">
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
                     <div class="typing-dot"></div>
                 </div>
-                <span>Cultivator AI sedang merespon...</span>
+                <span>AI sedang mengetik...</span>
             </div>
             
+            <!-- Input Area -->
             <div class="input-container">
                 <div class="input-wrapper">
                     <textarea 
                         id="message-input" 
-                        placeholder="Tanyakan sesuatu kepada Cultivator AI... (Enter untuk kirim, Shift+Enter untuk baris baru)"
-                        rows="1"
+                        placeholder="Ketik pesan Anda di sini... (Enter untuk kirim, Shift+Enter untuk baris baru)"
+                        rows="2"
                         autocomplete="off"></textarea>
                     <div class="input-actions">
-                        <button class="action-btn" id="attach-btn" title="Lampirkan file">
+                        <button class="action-btn" id="attach-btn" title="Attach file">
                             <i class="fas fa-paperclip"></i>
                         </button>
-                        <button class="action-btn" id="voice-btn" title="Voice input">
-                            <i class="fas fa-microphone"></i>
+                        <button class="action-btn" id="clear-input-btn" title="Clear input">
+                            <i class="fas fa-times"></i>
                         </button>
                     </div>
                 </div>
@@ -84,46 +88,50 @@
             </div>
         </div>
         
+        <!-- Controls -->
         <div class="controls">
             <button class="control-btn" id="clear-btn">
-                <i class="fas fa-trash-alt"></i> Bersihkan
+                <i class="fas fa-trash-alt"></i> Clear Chat
             </button>
             <button class="control-btn" id="theme-btn">
                 <i class="fas fa-moon"></i> Tema
             </button>
-            <button class="control-btn" id="code-btn">
-                <i class="fas fa-code"></i> Coding Mode
-            </button>
-            <button class="control-btn" id="export-btn">
-                <i class="fas fa-download"></i> Ekspor
-            </button>
             <button class="control-btn" id="settings-btn">
                 <i class="fas fa-cog"></i> Settings
             </button>
+            <button class="control-btn" id="new-chat-btn">
+                <i class="fas fa-plus"></i> New Chat
+            </button>
         </div>
         
+        <!-- Stats -->
         <div class="stats">
             <div class="stat-item">
                 <i class="fas fa-message"></i>
                 <span id="message-count">0 Pesan</span>
             </div>
             <div class="stat-item">
-                <i class="fas fa-brain"></i>
+                <i class="fas fa-bolt"></i>
                 <span id="token-count">~0 Token</span>
             </div>
             <div class="stat-item">
-                <i class="fas fa-bolt"></i>
-                <span id="api-status">API: Active</span>
+                <i class="fas fa-plug"></i>
+                <span id="connection-status">API: Checking</span>
             </div>
         </div>
         
+        <!-- Footer -->
         <footer>
-            <p>⚫⚪ YinYang Cultivator AI v1.0 · Powered by DeepSeek API</p>
-            <p class="footer-note">Untuk keperluan pribadi · <a href="#" id="privacy-btn">Privacy</a> · <a href="#" id="about-btn">About</a></p>
+            <p>⚫⚪ DeepKu AI v2.0 · Powered by DeepSeek API</p>
+            <p class="footer-note">
+                <a href="#" id="privacy-link">Privacy</a> · 
+                <a href="#" id="about-link">About</a> · 
+                <a href="https://platform.deepseek.com" target="_blank">Get API Key</a>
+            </p>
         </footer>
     </div>
 
-    <!-- Modals -->
+    <!-- Settings Modal -->
     <div class="modal" id="settings-modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -132,40 +140,56 @@
             </div>
             <div class="modal-body">
                 <div class="setting-group">
-                    <label for="api-key-input">API Key</label>
-                    <div class="input-with-btn">
-                        <input type="password" id="api-key-input" value="sk-ce242eb3749d4b9c88f6416b008d6836">
-                        <button id="toggle-key-btn"><i class="fas fa-eye"></i></button>
+                    <label for="api-key-display">API Key Status</label>
+                    <div class="api-key-display">
+                        <input type="text" id="api-key-display" readonly 
+                               placeholder="API key belum diatur">
+                        <button id="change-api-btn" class="small-btn">
+                            <i class="fas fa-edit"></i> Change
+                        </button>
                     </div>
-                    <small>Ganti dengan API key Anda sendiri dari platform.deepseek.com</small>
+                    <small>API key disimpan di browser Anda secara aman</small>
                 </div>
+                
                 <div class="setting-group">
-                    <label for="model-select">Model</label>
+                    <label for="model-select">AI Model</label>
                     <select id="model-select">
-                        <option value="deepseek-chat">DeepSeek Chat</option>
+                        <option value="deepseek-chat">DeepSeek Chat (Latest)</option>
                         <option value="deepseek-coder">DeepSeek Coder</option>
+                        <option value="deepseek-v3">DeepSeek V3 (Beta)</option>
+                        <option value="deepseek-v2">DeepSeek V2</option>
+                        <option value="deepseek-r1">DeepSeek R1</option>
                     </select>
+                    <small>Pilih model AI yang ingin digunakan</small>
                 </div>
+                
                 <div class="setting-group">
                     <label>
                         <input type="checkbox" id="save-history" checked>
                         Simpan riwayat percakapan
                     </label>
                 </div>
+                
                 <div class="setting-group">
                     <label>
                         <input type="checkbox" id="auto-scroll" checked>
                         Auto-scroll ke pesan baru
                     </label>
                 </div>
+                
                 <div class="setting-group">
                     <label for="max-tokens">Max Tokens: <span id="token-value">2000</span></label>
-                    <input type="range" id="max-tokens" min="100" max="4000" value="2000" step="100">
+                    <input type="range" id="max-tokens" min="500" max="4000" value="2000" step="100">
+                    <small>Token maksimal untuk respons AI</small>
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" id="reset-btn">Reset Settings</button>
-                <button class="btn-primary" id="save-settings">Simpan</button>
+                <button class="btn secondary" id="test-api-btn">
+                    <i class="fas fa-bolt"></i> Test Connection
+                </button>
+                <button class="btn primary" id="save-settings-btn">
+                    <i class="fas fa-save"></i> Save Settings
+                </button>
             </div>
         </div>
     </div>
@@ -174,37 +198,38 @@
     <div class="modal" id="about-modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3><i class="fas fa-info-circle"></i> Tentang YinYang Cultivator AI</h3>
+                <h3><i class="fas fa-info-circle"></i> About DeepKu AI</h3>
                 <button class="modal-close">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="about-content">
                     <div class="about-logo">
-                        <div class="yin-yang-symbol large">
-                            <div class="yin-dot"></div>
-                            <div class="yang-dot"></div>
-                        </div>
+                        <img src="assets/yin-yang.svg" alt="Yin Yang" style="width: 80px; height: 80px;">
                     </div>
                     <h4>Konsep Yin Yang</h4>
-                    <p>Yin (⚫) dan Yang (⚪) adalah konsep dalam filosofi Tiongkok yang menggambarkan bagaimana kekuatan yang tampaknya bertentangan sebenarnya saling melengkapi, saling terhubung, dan saling bergantung di alam semesta.</p>
+                    <p>Yin (⚫) dan Yang (⚪) adalah konsep filosofi Tiongkok yang melambangkan harmoni dalam dualitas.</p>
                     
-                    <h4>Fitur:</h4>
+                    <h4>Fitur Utama:</h4>
                     <ul>
-                        <li>💬 Chat AI dengan DeepSeek API</li>
-                        <li>⚡ Respons real-time</li>
-                        <li>💾 Penyimpanan lokal percakapan</li>
+                        <li>💬 Chat dengan berbagai model DeepSeek AI</li>
+                        <li>⚡ Respons real-time dengan API terbaru</li>
                         <li>🎨 Tema hitam putih yang elegan</li>
+                        <li>🔧 Multiple AI models support</li>
+                        <li>💾 Penyimpanan lokal percakapan</li>
                         <li>📱 Responsif untuk semua device</li>
-                        <li>🔧 Multiple AI models</li>
                     </ul>
                     
-                    <h4>Teknologi:</h4>
-                    <p>Dibangun dengan HTML5, CSS3, JavaScript ES6+</p>
-                    <p>Menggunakan DeepSeek API untuk kecerdasan buatan</p>
+                    <h4>Cara Penggunaan:</h4>
+                    <ol>
+                        <li>Dapatkan API key dari platform.deepseek.com</li>
+                        <li>Masukkan API key di Settings</li>
+                        <li>Pilih model AI yang diinginkan</li>
+                        <li>Mulai chatting!</li>
+                    </ol>
                     
-                    <div class="credits">
-                        <p><strong>API Key:</strong> Digunakan untuk keperluan pribadi</p>
-                        <p><strong>Deploy:</strong> Netlify / InfinityFree</p>
+                    <div class="version-info">
+                        <p><strong>Version:</strong> 2.0.0</p>
+                        <p><strong>Last Updated:</strong> December 2024</p>
                     </div>
                 </div>
             </div>
@@ -224,20 +249,20 @@
                     <p>Semua percakapan disimpan <strong>hanya di browser Anda</strong> menggunakan localStorage. Data tidak dikirim ke server mana pun selain DeepSeek API.</p>
                     
                     <h4>API Key</h4>
-                    <p>API key Anda disimpan di localStorage browser. Hanya Anda yang dapat mengaksesnya.</p>
+                    <p>API key Anda disimpan di localStorage browser dan hanya dapat diakses oleh Anda.</p>
                     
                     <h4>DeepSeek API</h4>
                     <p>Pesan Anda dikirim ke DeepSeek API untuk diproses. Baca <a href="https://platform.deepseek.com/privacy" target="_blank">privacy policy DeepSeek</a> untuk detail.</p>
                     
-                    <h4>Rekomendasi Keamanan:</h4>
+                    <h4>Keamanan:</h4>
                     <ul>
                         <li>Jangan bagikan API key Anda</li>
                         <li>Hapus riwayat percakapan setelah selesai</li>
                         <li>Gunakan di browser private mode jika diperlukan</li>
-                        <li>Simpan backup percakapan penting</li>
+                        <li>Clear cache browser secara berkala</li>
                     </ul>
                     
-                    <div class="warning">
+                    <div class="warning-box">
                         <i class="fas fa-exclamation-triangle"></i>
                         <p>Ini adalah tool pribadi. Anda bertanggung jawab penuh atas penggunaan API key dan data Anda.</p>
                     </div>
@@ -246,9 +271,106 @@
         </div>
     </div>
 
-    <!-- Toast Notification -->
-    <div class="toast" id="toast"></div>
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
 
+    <!-- JavaScript -->
     <script src="script.js"></script>
+    
+    <!-- Inline JavaScript for quick setup -->
+    <script>
+        // Quick event listeners for modal links
+        document.addEventListener('DOMContentLoaded', function() {
+            // About link
+            const aboutLink = document.getElementById('about-link');
+            if (aboutLink) {
+                aboutLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    document.getElementById('about-modal').classList.add('active');
+                });
+            }
+            
+            // Privacy link
+            const privacyLink = document.getElementById('privacy-link');
+            if (privacyLink) {
+                privacyLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    document.getElementById('privacy-modal').classList.add('active');
+                });
+            }
+            
+            // Clear input button
+            const clearInputBtn = document.getElementById('clear-input-btn');
+            if (clearInputBtn) {
+                clearInputBtn.addEventListener('click', function() {
+                    const input = document.getElementById('message-input');
+                    if (input) {
+                        input.value = '';
+                        input.style.height = 'auto';
+                        input.focus();
+                    }
+                });
+            }
+            
+            // New chat button
+            const newChatBtn = document.getElementById('new-chat-btn');
+            if (newChatBtn) {
+                newChatBtn.addEventListener('click', function() {
+                    if (confirm('Mulai percakapan baru?')) {
+                        window.location.reload();
+                    }
+                });
+            }
+            
+            // Close modals on ESC key
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    document.querySelectorAll('.modal.active').forEach(modal => {
+                        modal.classList.remove('active');
+                    });
+                }
+            });
+            
+            // Close modals on overlay click
+            document.querySelectorAll('.modal').forEach(modal => {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        this.classList.remove('active');
+                    }
+                });
+            });
+            
+            // Close buttons for modals
+            document.querySelectorAll('.modal-close').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    this.closest('.modal').classList.remove('active');
+                });
+            });
+        });
+        
+        // Auto-resize textarea
+        function autoResizeTextarea() {
+            const textarea = document.getElementById('message-input');
+            if (textarea) {
+                textarea.style.height = 'auto';
+                textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+                
+                // Show/hide clear button based on content
+                const clearBtn = document.getElementById('clear-input-btn');
+                if (clearBtn) {
+                    clearBtn.style.opacity = textarea.value.trim() ? '1' : '0.5';
+                }
+            }
+        }
+        
+        // Initialize on load
+        window.addEventListener('load', function() {
+            const textarea = document.getElementById('message-input');
+            if (textarea) {
+                textarea.addEventListener('input', autoResizeTextarea);
+                autoResizeTextarea(); // Initial call
+            }
+        });
+    </script>
 </body>
 </html>
