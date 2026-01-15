@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <style>
+      .yin-yang { fill-rule: evenodd; clip-rule: evenodd; }
+      .yin { fill: #000000; }
+      .yang { fill: #ffffff; }
+      .circle { stroke: none; }
+    </style>
+  </defs>
+  <g transform="translate(0, 0)">
+    <path class="yin-yang" d="M50,100C22.4,100,0,77.6,0,50S22.4,0,50,0s50,22.4,50,50S77.6,100,50,100z M50,10c-22.1,0-40,17.9-40,40
+      s17.9,40,40,40s40-17.9,40-40S72.1,10,50,10z"/>
+    <path class="yin" d="M50,50c0-13.8-11.2-25-25-25C11.2,25,0,36.2,0,50s11.2,25,25,25C38.8,75,50,63.8,50,50z"/>
+    <circle class="yang circle" cx="25" cy="25" r="5"/>
+    <circle class="yin circle" cx="75" cy="75" r="5"/>
+    <path class="yang" d="M50,50c0,13.8,11.2,25,25,25c13.8,0,25-11.2,25-25s-11.2-25-25-25C61.2,25,50,36.2,50,50z"/>
+  </g>
+</svg>
