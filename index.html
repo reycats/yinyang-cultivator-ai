@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚫⚪ YinYang Cultivator AI</title>
+    <meta name="description" content="AI Assistant dengan tema Yin Yang yang seimbang">
+    <meta name="theme-color" content="#0a0a0a">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="icon" href="assets/favicon.ico" type="image/x-icon">
+    <link rel="manifest" href="manifest.json">
+</head>
+<body>
+    <div class="yin-yang-bg"></div>
+    <div class="floating-particles"></div>
+    
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="yin-yang-symbol">
+                    <div class="yin-dot"></div>
+                    <div class="yang-dot"></div>
+                </div>
+                <h1>YinYang Cultivator AI</h1>
+            </div>
+            <p class="subtitle">Harmoni dalam Dualitas · Keseimbangan dalam Dialog</p>
+        </header>
+        
+        <div class="chat-container">
+            <div class="chat-header">
+                <div class="model-info">
+                    <span class="model-tag">DeepSeek-Latest</span>
+                    <span>⚡ Real-time AI Assistant</span>
+                </div>
+                <div class="status">
+                    <div class="status-dot"></div>
+                    <span id="status-text">API Connected</span>
+                </div>
+            </div>
+            
+            <div class="messages-container" id="messages-container">
+                <!-- Messages will appear here -->
+                <div class="message bot welcome-message">
+                    <div class="avatar">
+                        <i class="fas fa-yin-yang"></i>
+                    </div>
+                    <div class="message-content">
+                        <p>🎯 <strong>Selamat datang, Cultivator.</strong> Saya adalah asisten AI dengan tema Yin Yang yang seimbang.</p>
+                        <p>✨ <strong>Fitur:</strong> Diskusi mendalam, bantuan coding, analisis teks, dan konsultasi filosofis.</p>
+                        <p>📱 <strong>Tips:</strong> Tekan Enter untuk mengirim, Shift+Enter untuk baris baru</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="typing-indicator" id="typing-indicator">
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+                <span>Cultivator AI sedang merespon...</span>
+            </div>
+            
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <textarea 
+                        id="message-input" 
+                        placeholder="Tanyakan sesuatu kepada Cultivator AI... (Enter untuk kirim, Shift+Enter untuk baris baru)"
+                        rows="1"
+                        autocomplete="off"></textarea>
+                    <div class="input-actions">
+                        <button class="action-btn" id="attach-btn" title="Lampirkan file">
+                            <i class="fas fa-paperclip"></i>
+                        </button>
+                        <button class="action-btn" id="voice-btn" title="Voice input">
+                            <i class="fas fa-microphone"></i>
+                        </button>
+                    </div>
+                </div>
+                <button id="send-btn" class="send-button">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button class="control-btn" id="clear-btn">
+                <i class="fas fa-trash-alt"></i> Bersihkan
+            </button>
+            <button class="control-btn" id="theme-btn">
+                <i class="fas fa-moon"></i> Tema
+            </button>
+            <button class="control-btn" id="code-btn">
+                <i class="fas fa-code"></i> Coding Mode
+            </button>
+            <button class="control-btn" id="export-btn">
+                <i class="fas fa-download"></i> Ekspor
+            </button>
+            <button class="control-btn" id="settings-btn">
+                <i class="fas fa-cog"></i> Settings
+            </button>
+        </div>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <i class="fas fa-message"></i>
+                <span id="message-count">0 Pesan</span>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-brain"></i>
+                <span id="token-count">~0 Token</span>
+            </div>
+            <div class="stat-item">
+                <i class="fas fa-bolt"></i>
+                <span id="api-status">API: Active</span>
+            </div>
+        </div>
+        
+        <footer>
+            <p>⚫⚪ YinYang Cultivator AI v1.0 · Powered by DeepSeek API</p>
+            <p class="footer-note">Untuk keperluan pribadi · <a href="#" id="privacy-btn">Privacy</a> · <a href="#" id="about-btn">About</a></p>
+        </footer>
+    </div>
+
+    <!-- Modals -->
+    <div class="modal" id="settings-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-cog"></i> Settings</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="setting-group">
+                    <label for="api-key-input">API Key</label>
+                    <div class="input-with-btn">
+                        <input type="password" id="api-key-input" value="sk-ce242eb3749d4b9c88f6416b008d6836">
+                        <button id="toggle-key-btn"><i class="fas fa-eye"></i></button>
+                    </div>
+                    <small>Ganti dengan API key Anda sendiri dari platform.deepseek.com</small>
+                </div>
+                <div class="setting-group">
+                    <label for="model-select">Model</label>
+                    <select id="model-select">
+                        <option value="deepseek-chat">DeepSeek Chat</option>
+                        <option value="deepseek-coder">DeepSeek Coder</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="save-history" checked>
+                        Simpan riwayat percakapan
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="auto-scroll" checked>
+                        Auto-scroll ke pesan baru
+                    </label>
+                </div>
+                <div class="setting-group">
+                    <label for="max-tokens">Max Tokens: <span id="token-value">2000</span></label>
+                    <input type="range" id="max-tokens" min="100" max="4000" value="2000" step="100">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" id="reset-btn">Reset Settings</button>
+                <button class="btn-primary" id="save-settings">Simpan</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- About Modal -->
+    <div class="modal" id="about-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-info-circle"></i> Tentang YinYang Cultivator AI</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="about-content">
+                    <div class="about-logo">
+                        <div class="yin-yang-symbol large">
+                            <div class="yin-dot"></div>
+                            <div class="yang-dot"></div>
+                        </div>
+                    </div>
+                    <h4>Konsep Yin Yang</h4>
+                    <p>Yin (⚫) dan Yang (⚪) adalah konsep dalam filosofi Tiongkok yang menggambarkan bagaimana kekuatan yang tampaknya bertentangan sebenarnya saling melengkapi, saling terhubung, dan saling bergantung di alam semesta.</p>
+                    
+                    <h4>Fitur:</h4>
+                    <ul>
+                        <li>💬 Chat AI dengan DeepSeek API</li>
+                        <li>⚡ Respons real-time</li>
+                        <li>💾 Penyimpanan lokal percakapan</li>
+                        <li>🎨 Tema hitam putih yang elegan</li>
+                        <li>📱 Responsif untuk semua device</li>
+                        <li>🔧 Multiple AI models</li>
+                    </ul>
+                    
+                    <h4>Teknologi:</h4>
+                    <p>Dibangun dengan HTML5, CSS3, JavaScript ES6+</p>
+                    <p>Menggunakan DeepSeek API untuk kecerdasan buatan</p>
+                    
+                    <div class="credits">
+                        <p><strong>API Key:</strong> Digunakan untuk keperluan pribadi</p>
+                        <p><strong>Deploy:</strong> Netlify / InfinityFree</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Privacy Modal -->
+    <div class="modal" id="privacy-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-shield-alt"></i> Privacy & Security</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="privacy-content">
+                    <h4>Data Storage</h4>
+                    <p>Semua percakapan disimpan <strong>hanya di browser Anda</strong> menggunakan localStorage. Data tidak dikirim ke server mana pun selain DeepSeek API.</p>
+                    
+                    <h4>API Key</h4>
+                    <p>API key Anda disimpan di localStorage browser. Hanya Anda yang dapat mengaksesnya.</p>
+                    
+                    <h4>DeepSeek API</h4>
+                    <p>Pesan Anda dikirim ke DeepSeek API untuk diproses. Baca <a href="https://platform.deepseek.com/privacy" target="_blank">privacy policy DeepSeek</a> untuk detail.</p>
+                    
+                    <h4>Rekomendasi Keamanan:</h4>
+                    <ul>
+                        <li>Jangan bagikan API key Anda</li>
+                        <li>Hapus riwayat percakapan setelah selesai</li>
+                        <li>Gunakan di browser private mode jika diperlukan</li>
+                        <li>Simpan backup percakapan penting</li>
+                    </ul>
+                    
+                    <div class="warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Ini adalah tool pribadi. Anda bertanggung jawab penuh atas penggunaan API key dan data Anda.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Notification -->
+    <div class="toast" id="toast"></div>
+
+    <script src="script.js"></script>
+</body>
+</html>
