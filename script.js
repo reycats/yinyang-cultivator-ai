@@ -1,12 +1,86 @@
 // ==================== CONFIGURATION ====================
 const CONFIG = {
-    API_KEY: "sk-ce242eb3749d4b9c88f6416b008d6836",
+    API_KEY: "", // KOSONG - ambil dari localStorage atau user input
     API_URL: "https://api.deepseek.com/chat/completions",
     DEFAULT_MODEL: "deepseek-chat",
     MAX_TOKENS: 2000,
     DEFAULT_THEME: "dark",
     VERSION: "1.0.0"
 };
+
+// ==================== API KEY MANAGER ====================
+class ApiKeyManager {
+    static STORAGE_KEY = 'deepseek_api_key';
+    
+    static getApiKey() {
+        // Priority: localStorage > CONFIG.API_KEY
+        const storedKey = localStorage.getItem(this.STORAGE_KEY);
+        if (storedKey && storedKey.startsWith('sk-')) {
+            return storedKey;
+        }
+        return CONFIG.API_KEY;
+    }
+    
+    static setApiKey(key) {
+        if (key && key.startsWith('sk-')) {
+            localStorage.setItem(this.STORAGE_KEY, key);
+            CONFIG.API_KEY = key;
+            return true;
+        }
+        return false;
+    }
+    
+    static hasValidKey() {
+        const key = this.getApiKey();
+        return key && key.startsWith('sk-') && key !== "sk-ce242eb3749d4b9c88f6416b008d6836";
+    }
+    
+    static showKeyModal() {
+        // Only show if no valid key exists
+        if (this.hasValidKey()) return;
+        
+        const modal = document.createElement('div');
+        modal.className = 'api-key-modal';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <h3><i class="fas fa-key"></i> API Key Required</h3>
+                <p>Masukkan API Key DeepSeek Anda untuk mulai menggunakan AI Assistant:</p>
+                <input type="password" id="new-api-key" placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                <p class="help-text">
+                    Dapatkan API key gratis dari <a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a>
+                </p>
+                <div class="modal-buttons">
+                    <button id="save-key-btn">Simpan & Mulai</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        
+        // Focus input
+        setTimeout(() => {
+            document.getElementById('new-api-key').focus();
+        }, 100);
+        
+        // Event listeners
+        document.getElementById('save-key-btn').addEventListener('click', () => {
+            const key = document.getElementById('new-api-key').value.trim();
+            if (this.setApiKey(key)) {
+                document.body.removeChild(modal);
+                location.reload();
+            } else {
+                alert('API Key tidak valid! Harus dimulai dengan "sk-"');
+            }
+        });
+        
+        // Close on Escape
+        modal.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                document.body.removeChild(modal);
+            }
+        });
+    }
+}
 
 // ==================== STATE MANAGEMENT ====================
 let state = {
@@ -181,6 +255,15 @@ const utils = {
 const chat = {
     // Initialize chat
     async init() {
+        // Check API key first
+        if (!ApiKeyManager.hasValidKey()) {
+            ApiKeyManager.showKeyModal();
+            return;
+        }
+        
+        // Load API key
+        CONFIG.API_KEY = ApiKeyManager.getApiKey();
+        
         this.loadState();
         this.setupEventListeners();
         await this.testConnection();
@@ -239,6 +322,14 @@ const chat = {
     // Test API connection
     async testConnection() {
         try {
+            if (!CONFIG.API_KEY || CONFIG.API_KEY === "sk-ce242eb3749d4b9c88f6416b008d6836") {
+                state.apiConnected = false;
+                elements.statusText.textContent = 'API Key Required';
+                elements.apiStatus.textContent = 'API: Not Set';
+                elements.apiStatus.style.color = 'var(--warning)';
+                return;
+            }
+
             const response = await fetch(CONFIG.API_URL, {
                 method: 'POST',
                 headers: {
@@ -247,7 +338,7 @@ const chat = {
                 },
                 body: JSON.stringify({
                     model: state.currentModel,
-                    messages: [{ role: "user", content: "Test" }],
+                    messages: [{ role: "user", content: "test" }],
                     max_tokens: 1
                 })
             });
@@ -275,6 +366,13 @@ const chat = {
     async sendMessage() {
         const message = elements.messageInput.value.trim();
         if (!message || state.isTyping) return;
+
+        // Check API key
+        if (!CONFIG.API_KEY || CONFIG.API_KEY === "sk-ce242eb3749d4b9c88f6416b008d6836") {
+            utils.showToast('API Key belum diatur. Buka Settings untuk mengatur API Key.', 'error');
+            this.openSettings();
+            return;
+        }
 
         // Add user message
         this.addMessage('user', message);
@@ -368,6 +466,12 @@ const chat = {
             elements.apiStatus.style.color = 'var(--error)';
             
             utils.showToast('Gagal mengirim pesan', 'error');
+            
+            // If API key error, show key modal
+            if (error.message.includes('401') || error.message.includes('402') || error.message.includes('429')) {
+                ApiKeyManager.showKeyModal();
+            }
+            
         } finally {
             // Re-enable input
             state.isTyping = false;
@@ -459,6 +563,7 @@ const chat = {
                 `• **Shift+Enter** untuk baris baru\n` +
                 `• Gunakan \`code\` untuk format kode\n` +
                 `• Ekspor percakapan untuk backup\n\n` +
+                `🔑 **API Key:** ${ApiKeyManager.hasValidKey() ? '✓ Terdeteksi' : '❌ Belum diatur'}\n` +
                 `⚡ **Status:** API ${state.apiConnected ? 'Terhubung' : 'Offline'}`
             );
         } else {
@@ -693,7 +798,7 @@ const chat = {
 
     // Load settings to UI
     loadSettingsToUI() {
-        elements.apiKeyInput.value = CONFIG.API_KEY;
+        elements.apiKeyInput.value = ApiKeyManager.getApiKey() || "";
         elements.modelSelect.value = state.currentModel;
         elements.saveHistoryCheck.checked = state.settings.saveHistory;
         elements.autoScrollCheck.checked = state.settings.autoScroll;
@@ -706,8 +811,13 @@ const chat = {
         // Update API key if changed
         const newApiKey = elements.apiKeyInput.value.trim();
         if (newApiKey && newApiKey !== CONFIG.API_KEY) {
-            CONFIG.API_KEY = newApiKey;
-            utils.showToast('API Key diperbarui', 'success');
+            if (ApiKeyManager.setApiKey(newApiKey)) {
+                utils.showToast('API Key diperbarui', 'success');
+                // Test connection with new key
+                this.testConnection();
+            } else {
+                utils.showToast('API Key tidak valid!', 'error');
+            }
         }
         
         // Update other settings
@@ -718,7 +828,6 @@ const chat = {
         
         // Save and test connection
         this.saveState();
-        this.testConnection();
         this.closeModals();
         
         utils.showToast('Pengaturan disimpan', 'success');
@@ -819,3 +928,97 @@ if ('serviceWorker' in navigator) {
             });
     });
 }
+
+// ==================== CSS FOR API KEY MODAL ====================
+const apiKeyModalCSS = `
+.api-key-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.api-key-modal .modal-content {
+    background: var(--yin);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    padding: 30px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.api-key-modal h3 {
+    color: var(--yang);
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.api-key-modal p {
+    color: var(--accent);
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.api-key-modal input {
+    width: 100%;
+    padding: 12px 15px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    color: var(--yang);
+    font-size: 1rem;
+    margin-bottom: 15px;
+}
+
+.api-key-modal input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.api-key-modal .help-text {
+    font-size: 0.9rem;
+    color: var(--accent-light);
+    margin-bottom: 20px;
+}
+
+.api-key-modal .help-text a {
+    color: var(--accent);
+    text-decoration: underline;
+}
+
+.api-key-modal .modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.api-key-modal button {
+    padding: 10px 20px;
+    background: var(--accent);
+    color: var(--yin);
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.api-key-modal button:hover {
+    background: var(--accent-light);
+    transform: translateY(-2px);
+}
+`;
+
+// Add CSS to head
+const style = document.createElement('style');
+style.textContent = apiKeyModalCSS;
+document.head.appendChild(style);
