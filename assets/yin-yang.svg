@@ -1,18 +1,81 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <defs>
-    <style>
-      .yin-yang { fill-rule: evenodd; clip-rule: evenodd; }
-      .yin { fill: #000000; }
-      .yang { fill: #ffffff; }
-      .circle { stroke: none; }
-    </style>
-  </defs>
-  <g transform="translate(0, 0)">
-    <path class="yin-yang" d="M50,100C22.4,100,0,77.6,0,50S22.4,0,50,0s50,22.4,50,50S77.6,100,50,100z M50,10c-22.1,0-40,17.9-40,40
-      s17.9,40,40,40s40-17.9,40-40S72.1,10,50,10z"/>
-    <path class="yin" d="M50,50c0-13.8-11.2-25-25-25C11.2,25,0,36.2,0,50s11.2,25,25,25C38.8,75,50,63.8,50,50z"/>
-    <circle class="yang circle" cx="25" cy="25" r="5"/>
-    <circle class="yin circle" cx="75" cy="75" r="5"/>
-    <path class="yang" d="M50,50c0,13.8,11.2,25,25,25c13.8,0,25-11.2,25-25s-11.2-25-25-25C61.2,25,50,36.2,50,50z"/>
-  </g>
+    <!-- Yin Yang Symbol -->
+    <defs>
+        <linearGradient id="yin-yang-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#000000;stop-opacity:1" />
+            <stop offset="50%" style="stop-color:#000000;stop-opacity:1" />
+            <stop offset="50%" style="stop-color:#ffffff;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#ffffff;stop-opacity:1" />
+        </linearGradient>
+        
+        <linearGradient id="yin-dot-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#222222;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#000000;stop-opacity:1" />
+        </linearGradient>
+        
+        <linearGradient id="yang-dot-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:#f0f0f0;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#ffffff;stop-opacity:1" />
+        </linearGradient>
+        
+        <filter id="yin-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#000000" flood-opacity="0.3"/>
+        </filter>
+        
+        <filter id="yang-shadow" x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#ffffff" flood-opacity="0.3"/>
+        </filter>
+        
+        <style>
+            @keyframes rotate {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+            }
+            @keyframes float {
+                0%, 100% { transform: translateY(0) scale(1); }
+                50% { transform: translateY(-5px) scale(1.02); }
+            }
+            @keyframes pulse {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.8; }
+            }
+            .yin-yang-group {
+                animation: rotate 20s linear infinite;
+                transform-origin: center;
+            }
+            .yin-part:hover, .yang-part:hover {
+                animation: float 2s ease-in-out infinite;
+            }
+            .yin-dot, .yang-dot {
+                animation: pulse 4s ease-in-out infinite;
+            }
+        </style>
+    </defs>
+    
+    <!-- Main Circle with Gradient -->
+    <circle cx="50" cy="50" r="48" fill="url(#yin-yang-gradient)" stroke="#888888" stroke-width="1" 
+            class="yin-yang-group"/>
+    
+    <!-- Yang (white) side with wave -->
+    <path d="M50,2 C73.2,2 92,20.8 92,44 C92,67.2 73.2,86 50,86 C26.8,86 8,67.2 8,44 C8,20.8 26.8,2 50,2 Z" 
+          fill="#ffffff" class="yang-part"/>
+    
+    <!-- Yin (black) side with wave -->
+    <path d="M50,98 C73.2,98 92,79.2 92,56 C92,32.8 73.2,14 50,14 C26.8,14 8,32.8 8,56 C8,79.2 26.8,98 50,98 Z" 
+          fill="#000000" class="yin-part"/>
+    
+    <!-- Yin dot (black in white area) -->
+    <circle cx="50" cy="25" r="12" fill="url(#yin-dot-gradient)" filter="url(#yin-shadow)" class="yin-dot"/>
+    <circle cx="50" cy="25" r="8" fill="#000000"/>
+    
+    <!-- Yang dot (white in black area) -->
+    <circle cx="50" cy="75" r="12" fill="url(#yang-dot-gradient)" filter="url(#yang-shadow)" class="yang-dot"/>
+    <circle cx="50" cy="75" r="8" fill="#ffffff"/>
+    
+    <!-- Detailed patterns -->
+    <path d="M50,20 Q55,15 60,20 T70,30" stroke="#ffffff" stroke-width="0.5" fill="none" opacity="0.3"/>
+    <path d="M50,80 Q45,75 40,80 T30,70" stroke="#000000" stroke-width="0.5" fill="none" opacity="0.3"/>
+    
+    <!-- Center point -->
+    <circle cx="50" cy="50" r="1" fill="#888888" opacity="0.5"/>
 </svg>
